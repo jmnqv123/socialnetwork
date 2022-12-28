@@ -1,0 +1,90 @@
+import os
+from flask import Flask, request, redirect, url_for, render_template
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+
+# Configure the database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///social.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# Define the User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(80), nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+
+# Define the Post model
+class Post(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user = db.relationship('User', backref=db.backref('posts', lazy=True))
+
+# Initialize the database
+@app.before_first_request
+def create_tables():
+    db.create_all()
+
+# Render the homepage
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+# Render the signup page
+@app.route('/signup')
+def signup():
+    return render_template('signup.html')
+
+# Handle signup form submission
+@app.route('/signup', methods=['POST'])
+def signup_post():
+    username = request.form.get('username')
+    password = request.form.get('password')
+    name = request.form.get('name')
+    email = request.form.get('email')
+
+    user = User.query.filter_by(username=username).first()
+    if user:
+        return render_template('signup.html', error='Username already taken')
+
+    new_user = User(username=username, password=password, name=name, email=email)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return redirect(url_for('login'))
+
+# Render the login page
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
+# Handle login form submission
+@app.route('/login', methods=['POST'])
+def login_post():
+    username = request.form.get('username')
+    password = request.form.get('password')
+
+    user = User.query.filter_by(username=username).first()
+    if not user or user.password != password:
+        return render_template('login.html', error='Invalid username or password')
+# Render the new post form
+@app.route('/new_post')
+def new_post():
+    return render_template('new_post.html')
+
+# Handle new post form submission
+@app.route('/new_post', methods=['POST'])
+def new_post_post():
+    content = request.form.get('content')
+    user_id = request.form.get('user_id')  # You will need to store the current user's id in the session
+
+    new_post = Post(content=content, user_id=user_id)
+    db.session.add(new_post)
+    db.session.commit()
+
+    return redirect(url_for('index'))
+
